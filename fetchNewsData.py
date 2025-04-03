@@ -9,7 +9,7 @@ import os
 # finhubb api key: cvmrjp1r01ql90pvr4g0cvmrjp1r01ql90pvr4gg
 finnhub_client = finnhub.Client("cvmrjp1r01ql90pvr4g0cvmrjp1r01ql90pvr4gg")
 
-tickers = ["AAPL", "AMZN", "COR", "GOOG", "JPM", "MCK", "MSFT", "UNH", "WMT" "XOM"]
+tickers = ["AAPL", "AMZN", "COR", "GOOG", "JPM", "MCK", "MSFT", "UNH", "WMT", "XOM"]
 
 start_date = "2024-01-01"
 end_date = "2024-12-31"
