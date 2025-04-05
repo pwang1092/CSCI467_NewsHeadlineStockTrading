@@ -1,4 +1,4 @@
-import numpy
+import numpy as np
 import pandas as pd
 import json
 import datetime
@@ -6,6 +6,9 @@ import os
 
 import yfinance as yf
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
+
+from sklearn.linear_model import LinearRegression
+from sklearn.metrics import mean_squared_error
 
 def loadCompanyNews():
     # Directory where JSON files are stored
@@ -47,8 +50,8 @@ def getSentimentScores(news_data):
 
     return sentiment_scores
 
-def getStockPriceChange(news_data):
 
+def getStockPriceChange(news_data): # based on close price of the current day of article and close price of previous day
     price_changes = {}
 
     for ticker, articles in news_data.items():
@@ -96,12 +99,72 @@ def getStockPriceChange(news_data):
     return price_changes
 
 
+# New function: Calculate mean squared error for each ticker
+def calculate_mse(sentiment_scores, price_changes, models):
+    mse_scores = {}
+    for ticker in models.keys():
+        if models[ticker] is None:
+            mse_scores[ticker] = None
+            continue
+        
+        sentiment_dict = sentiment_scores.get(ticker, {})
+        price_dict = price_changes.get(ticker, {})
+        
+        # Align data by article ID, excluding None values
+        article_ids = set(sentiment_dict.keys()) & set(price_dict.keys())
+        X = [sentiment_dict[article_id] for article_id in article_ids if price_dict[article_id] is not None]
+        y_true = [price_dict[article_id] for article_id in article_ids if price_dict[article_id] is not None]
+        
+        if not X or not y_true:
+            mse_scores[ticker] = None
+            continue
+        
+        X = np.array(X).reshape(-1, 1)
+        
+        model = models[ticker]
+        y_pred = model.predict(X)
+        
+        mse = mean_squared_error(y_true, y_pred)
+        mse_scores[ticker] = mse
+    
+    return mse_scores
+
+def train_linear_regression(sentiment_scores, price_changes):
+    models = {}
+    for ticker in sentiment_scores.keys():
+        # Get sentiment scores (X) and price changes (y) for this ticker
+        sentiment_dict = sentiment_scores.get(ticker, {})
+        price_dict = price_changes.get(ticker, {})
+        
+        # Align data by article ID, excluding None values
+        article_ids = set(sentiment_dict.keys()) & set(price_dict.keys())  # Intersection of IDs
+        X = [sentiment_dict[article_id] for article_id in article_ids if price_dict[article_id] is not None]
+        y = [price_dict[article_id] for article_id in article_ids if price_dict[article_id] is not None]
+        
+        if len(X) < 2 or len(y) < 2:
+            models[ticker] = None
+            print(f"Skipping {ticker}: insufficient data ({len(X)} points)")
+            continue
+        
+        # Reshape X for sklearn
+        X = np.array(X).reshape(-1, 1)
+        y = np.array(y)
+        
+        # Train the model
+        model = LinearRegression()
+        model.fit(X, y)
+        models[ticker] = model
+    
+    return models
+
+
 if __name__ == "__main__":
     news_data = loadCompanyNews()
     sentiment_scores = getSentimentScores(news_data)
     price_changes = getStockPriceChange(news_data)
 
     # Example output for UNH (assuming that's the ticker in your data)
+    '''
     ticker = "UNH"
     print(f"Sentiment scores for {ticker}:")
     for article_id, score in sentiment_scores.get(ticker, {}).items():
@@ -112,6 +175,18 @@ if __name__ == "__main__":
         print(f"Article ID {article_id}: {change}")
     
     print(len(sentiment_scores.get("UNH", {})), len(price_changes.get("UNH", {})))
+    '''
+
+    models = train_linear_regression(sentiment_scores, price_changes)
+    mse_scores = calculate_mse(sentiment_scores, price_changes, models)
+
+    for ticker in models.keys():
+        if models[ticker] is not None:
+            print(f"\n{ticker} Model: slope={models[ticker].coef_[0]:.4f}, "
+                  f"intercept={models[ticker].intercept_:.4f}")
+            print(f"{ticker} MSE: {mse_scores[ticker]:.6f}")
+        else:
+            print(f"\n{ticker}: No model trained (insufficient data)")
     
 
 
