@@ -129,6 +129,43 @@ def calculate_mse(sentiment_scores, price_changes, models):
     
     return mse_scores
 
+
+def calculate_directional_accuracy(sentiment_scores, price_changes):
+    accuracy_scores = {}
+    for ticker in sentiment_scores.keys():
+        sentiment_dict = sentiment_scores.get(ticker, {})
+        price_dict = price_changes.get(ticker, {})
+        
+        # Align data by article ID, excluding None values
+        article_ids = set(sentiment_dict.keys()) & set(price_dict.keys())
+        sentiments = [sentiment_dict[article_id] for article_id in article_ids if price_dict[article_id] is not None]
+        price_changes_list = [price_dict[article_id] for article_id in article_ids if price_dict[article_id] is not None]
+        
+        if not sentiments or not price_changes_list:
+            accuracy_scores[ticker] = None
+            print(f"No valid data for {ticker}")
+            continue
+        
+        correct = 0
+        total = 0
+        for sentiment, price_change in zip(sentiments, price_changes_list):
+            if sentiment == 0:
+                continue
+            # Positive sentiment predicts up, negative predicts down
+            predicted_up = sentiment > 0
+            actual_up = price_change > 0
+            if predicted_up == actual_up:
+                correct += 1
+            total += 1
+        
+        if total > 0:
+            accuracy = correct / total
+            accuracy_scores[ticker] = accuracy
+        else:
+            accuracy_scores[ticker] = None
+    
+    return accuracy_scores
+
 def train_linear_regression(sentiment_scores, price_changes):
     models = {}
     for ticker in sentiment_scores.keys():
@@ -179,14 +216,22 @@ if __name__ == "__main__":
 
     models = train_linear_regression(sentiment_scores, price_changes)
     mse_scores = calculate_mse(sentiment_scores, price_changes, models)
-
+    accuracy_scores = calculate_directional_accuracy(sentiment_scores, price_changes)
+    
     for ticker in models.keys():
         if models[ticker] is not None:
             print(f"\n{ticker} Model: slope={models[ticker].coef_[0]:.4f}, "
                   f"intercept={models[ticker].intercept_:.4f}")
             print(f"{ticker} MSE: {mse_scores[ticker]:.6f}")
+            accuracy = accuracy_scores.get(ticker)
+            if accuracy is not None:
+                print(f"{ticker} Directional Accuracy: {accuracy:.2%}")
+            else:
+                print(f"{ticker} Directional Accuracy: N/A (no valid predictions)")
         else:
             print(f"\n{ticker}: No model trained (insufficient data)")
+    
+
     
 
 
