@@ -9,6 +9,7 @@ from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
+from sklearn.model_selection import train_test_split
 
 def loadCompanyNews():
     # Directory where JSON files are stored
@@ -25,6 +26,22 @@ def loadCompanyNews():
                 news_data[ticker] = json.load(file)  # Store list of articles under the ticker
     
     return news_data
+
+def split_news_data(news_data, train_size=0.9):
+    '''
+    Split news dataset into train and test datasets
+    '''
+    train_news_data = {}
+    test_news_data = {}
+    for ticker, articles in news_data.items():
+        # Split articles into train and test sets (90% train, 10% test)
+        train_articles, test_articles = train_test_split(
+            articles, train_size=train_size, random_state=42, shuffle=True
+        )
+        train_news_data[ticker] = train_articles
+        test_news_data[ticker] = test_articles
+    return train_news_data, test_news_data
+
 
 def getSentimentScores(news_data):
     analyzer = SentimentIntensityAnalyzer()
@@ -197,8 +214,19 @@ def train_linear_regression(sentiment_scores, price_changes):
 
 if __name__ == "__main__":
     news_data = loadCompanyNews()
-    sentiment_scores = getSentimentScores(news_data)
-    price_changes = getStockPriceChange(news_data)
+
+    train_news_data, test_news_data = split_news_data(news_data, train_size=0.9)
+
+    train_sentiment_scores = getSentimentScores(train_news_data)
+    train_price_changes = getStockPriceChange(train_news_data)
+    test_sentiment_scores = getSentimentScores(test_news_data)
+    test_price_changes = getStockPriceChange(test_news_data)
+
+    models = train_linear_regression(train_sentiment_scores, train_price_changes)
+
+    # Evaluate on test data
+    test_mse_scores = calculate_mse(test_sentiment_scores, test_price_changes, models)
+    test_accuracy_scores = calculate_directional_accuracy(test_sentiment_scores, test_price_changes)
 
     # Example output for UNH (assuming that's the ticker in your data)
     '''
@@ -214,24 +242,21 @@ if __name__ == "__main__":
     print(len(sentiment_scores.get("UNH", {})), len(price_changes.get("UNH", {})))
     '''
 
-    models = train_linear_regression(sentiment_scores, price_changes)
-    mse_scores = calculate_mse(sentiment_scores, price_changes, models)
-    accuracy_scores = calculate_directional_accuracy(sentiment_scores, price_changes)
-    
+    # Print results
     for ticker in models.keys():
         if models[ticker] is not None:
-            print(f"\n{ticker} Model: slope={models[ticker].coef_[0]:.4f}, "
-                  f"intercept={models[ticker].intercept_:.4f}")
-            print(f"{ticker} MSE: {mse_scores[ticker]:.6f}")
-            accuracy = accuracy_scores.get(ticker)
+            print(f"\n{ticker} Model (trained on {len(train_sentiment_scores.get(ticker, {}))} articles): "
+                  f"slope={models[ticker].coef_[0]:.4f}, intercept={models[ticker].intercept_:.4f}")
+            print(f"{ticker} Test MSE: {test_mse_scores.get(ticker, 'N/A'):.6f}")
+            accuracy = test_accuracy_scores.get(ticker)
             if accuracy is not None:
-                print(f"{ticker} Directional Accuracy: {accuracy:.2%}")
+                print(f"{ticker} Test Directional Accuracy: {accuracy:.2%}")
             else:
-                print(f"{ticker} Directional Accuracy: N/A (no valid predictions)")
+                print(f"{ticker} Test Directional Accuracy: N/A (no valid predictions)")
         else:
-            print(f"\n{ticker}: No model trained (insufficient data)")
-    
-
-    
+            print(f"\n{ticker}: No model trained (insufficient training data)")
+    news_data = loadCompanyNews()
+    sentiment_scores = getSentimentScores(news_data)
+    price_changes = getStockPriceChange(news_data)
 
 
