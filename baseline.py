@@ -11,6 +11,8 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import train_test_split
 
+from graphLinReg import plot_regression
+
 def loadCompanyNews():
     # Directory where JSON files are stored
     output_dir = "finnhub_news"
@@ -214,7 +216,6 @@ def train_linear_regression(sentiment_scores, price_changes):
 
 if __name__ == "__main__":
     news_data = loadCompanyNews()
-
     train_news_data, test_news_data = split_news_data(news_data, train_size=0.9)
 
     train_sentiment_scores = getSentimentScores(train_news_data)
@@ -224,9 +225,33 @@ if __name__ == "__main__":
 
     models = train_linear_regression(train_sentiment_scores, train_price_changes)
 
-    # Evaluate on test data
-    test_mse_scores = calculate_mse(test_sentiment_scores, test_price_changes, models)
-    test_accuracy_scores = calculate_directional_accuracy(test_sentiment_scores, test_price_changes)
+    # Evaluate on both train and test data
+    train_mse_scores = pow(calculate_mse(train_sentiment_scores, train_price_changes, models), 0.5)
+    test_mse_scores = pow(calculate_mse(test_sentiment_scores, test_price_changes, models), 0.5)
+    train_accuracy_scores = pow(calculate_directional_accuracy(train_sentiment_scores, train_price_changes), 0.5)
+    test_accuracy_scores = pow(calculate_directional_accuracy(test_sentiment_scores, test_price_changes), 0.5)
+
+    # Print results
+    for ticker in models.keys():
+        if models[ticker] is not None:
+            print(f"\n{ticker} Model (trained on {len(train_sentiment_scores.get(ticker, {}))} articles): "
+                  f"slope={models[ticker].coef_[0]:.4f}, intercept={models[ticker].intercept_:.4f}")
+            train_mse = train_mse_scores.get(ticker, 'N/A')
+            test_mse = test_mse_scores.get(ticker, 'N/A')
+            print(f"{ticker} Train RMSE: {train_mse:.6f}" if isinstance(train_mse, float) else f"{ticker} Train RMSE: {train_mse}")
+            print(f"{ticker} Test RMSE: {test_mse:.6f}" if isinstance(test_mse, float) else f"{ticker} Test RMSE: {test_mse}")
+            train_accuracy = train_accuracy_scores.get(ticker)
+            test_accuracy = test_accuracy_scores.get(ticker)
+            if train_accuracy is not None:
+                print(f"{ticker} Train Directional Accuracy: {train_accuracy:.2%}")
+            else:
+                print(f"{ticker} Train Directional Accuracy: N/A (no valid predictions)")
+            if test_accuracy is not None:
+                print(f"{ticker} Test Directional Accuracy: {test_accuracy:.2%}")
+            else:
+                print(f"{ticker} Test Directional Accuracy: N/A (no valid predictions)")
+        else:
+            print(f"\n{ticker}: No model trained (insufficient training data)")
 
     # Example output for UNH (assuming that's the ticker in your data)
     '''
@@ -241,22 +266,5 @@ if __name__ == "__main__":
     
     print(len(sentiment_scores.get("UNH", {})), len(price_changes.get("UNH", {})))
     '''
-
-    # Print results
-    for ticker in models.keys():
-        if models[ticker] is not None:
-            print(f"\n{ticker} Model (trained on {len(train_sentiment_scores.get(ticker, {}))} articles): "
-                  f"slope={models[ticker].coef_[0]:.4f}, intercept={models[ticker].intercept_:.4f}")
-            print(f"{ticker} Test MSE: {test_mse_scores.get(ticker, 'N/A'):.6f}")
-            accuracy = test_accuracy_scores.get(ticker)
-            if accuracy is not None:
-                print(f"{ticker} Test Directional Accuracy: {accuracy:.2%}")
-            else:
-                print(f"{ticker} Test Directional Accuracy: N/A (no valid predictions)")
-        else:
-            print(f"\n{ticker}: No model trained (insufficient training data)")
-    news_data = loadCompanyNews()
-    sentiment_scores = getSentimentScores(news_data)
-    price_changes = getStockPriceChange(news_data)
-
+    plot_regression('GOOG', test_sentiment_scores, test_price_changes, models)
 
