@@ -11,7 +11,9 @@ from sklearn.linear_model import LinearRegression
 from sklearn.metrics import mean_squared_error
 from sklearn.model_selection import train_test_split
 
-from graphLinReg import plot_regression
+from graphLinReg import plot_regression, plot_all_models, plot_articles_per_day_histogram
+
+import time
 
 def loadCompanyNews():
     # Directory where JSON files are stored
@@ -69,7 +71,6 @@ def getSentimentScores(news_data):
 
     return sentiment_scores
 
-
 def getStockPriceChange(news_data): # based on close price of the current day of article and close price of previous day
     price_changes = {}
 
@@ -77,6 +78,8 @@ def getStockPriceChange(news_data): # based on close price of the current day of
         if not articles:
             price_changes[ticker] = {}
             continue
+        
+        time.sleep(0.5)
         
         # Build a dictionary of article IDs to publication dates
         publication_dates = {}
@@ -96,7 +99,7 @@ def getStockPriceChange(news_data): # based on close price of the current day of
         # Buffer period to cover all publication dates
         min_date = min(publication_dates.values()) - datetime.timedelta(days=30)
         max_date = max(publication_dates.values()) + datetime.timedelta(days=30)
-        stock_data = yf.download(ticker, start=min_date, end=max_date, progress=False)
+        stock_data = yf.download(ticker, start=min_date, end=max_date, auto_adjust=False, progress=False)
 
         if stock_data.empty:
             price_changes[ticker] = {article_id: None for article_id in publication_dates.keys()}
@@ -145,7 +148,7 @@ def calculate_mse(sentiment_scores, price_changes, models):
         
         mse = mean_squared_error(y_true, y_pred)
         mse_scores[ticker] = mse
-    
+
     return mse_scores
 
 
@@ -226,11 +229,13 @@ if __name__ == "__main__":
     models = train_linear_regression(train_sentiment_scores, train_price_changes)
 
     # Evaluate on both train and test data
-    train_mse_scores = pow(calculate_mse(train_sentiment_scores, train_price_changes, models), 0.5)
-    test_mse_scores = pow(calculate_mse(test_sentiment_scores, test_price_changes, models), 0.5)
-    train_accuracy_scores = pow(calculate_directional_accuracy(train_sentiment_scores, train_price_changes), 0.5)
-    test_accuracy_scores = pow(calculate_directional_accuracy(test_sentiment_scores, test_price_changes), 0.5)
+    train_mse_scores = calculate_mse(train_sentiment_scores, train_price_changes, models)
+    test_mse_scores = calculate_mse(test_sentiment_scores, test_price_changes, models)
+    train_accuracy_scores = calculate_directional_accuracy(train_sentiment_scores, train_price_changes)
+    test_accuracy_scores = calculate_directional_accuracy(test_sentiment_scores, test_price_changes)
 
+    average_accuracy = 0
+    average_RMSE = 0
     # Print results
     for ticker in models.keys():
         if models[ticker] is not None:
@@ -242,16 +247,24 @@ if __name__ == "__main__":
             print(f"{ticker} Test RMSE: {test_mse:.6f}" if isinstance(test_mse, float) else f"{ticker} Test RMSE: {test_mse}")
             train_accuracy = train_accuracy_scores.get(ticker)
             test_accuracy = test_accuracy_scores.get(ticker)
+
+            average_RMSE += test_mse
+
             if train_accuracy is not None:
                 print(f"{ticker} Train Directional Accuracy: {train_accuracy:.2%}")
             else:
                 print(f"{ticker} Train Directional Accuracy: N/A (no valid predictions)")
             if test_accuracy is not None:
                 print(f"{ticker} Test Directional Accuracy: {test_accuracy:.2%}")
+                average_accuracy += test_accuracy
             else:
                 print(f"{ticker} Test Directional Accuracy: N/A (no valid predictions)")
         else:
             print(f"\n{ticker}: No model trained (insufficient training data)")
+        
+    average_accuracy /= len(test_accuracy_scores)
+    average_RMSE /= len(test_mse_scores)
+    print("\nAverage accuracy:", average_accuracy, ", Average RMSE:", average_RMSE)
 
     # Example output for UNH (assuming that's the ticker in your data)
     '''
@@ -266,5 +279,6 @@ if __name__ == "__main__":
     
     print(len(sentiment_scores.get("UNH", {})), len(price_changes.get("UNH", {})))
     '''
-    plot_regression('GOOG', test_sentiment_scores, test_price_changes, models)
+    #plot_regression('GOOG', test_sentiment_scores, test_price_changes, models)
+    #plot_all_models(models)
 
