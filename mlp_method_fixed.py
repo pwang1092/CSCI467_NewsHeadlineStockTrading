@@ -267,3 +267,24 @@ if __name__ == "__main__":
         print(f"\n{tkr}:")
         print(f"  MSE: {vals['MSE']:.6f}")
         print(f"  Directional Accuracy: {vals['Directional Accuracy']:.2%}")
+    
+    # calculate overall stats
+    all_true = []
+    all_pred = []
+
+    for tkr, vals in stats.items():
+        sub = [i for i, m in enumerate(meta_list) if m["ticker"] == tkr]
+        all_true.extend(y[sub])
+        all_pred.extend(model.predict(X[sub]))
+
+    all_true = np.array(all_true)
+    all_pred = np.array(all_pred)
+
+    avg_mse  = mean_squared_error(all_true, all_pred)
+    avg_r2   = model.score(X, y)
+    avg_diracc = ((all_true > 0) == (all_pred > 0)).mean()
+
+    print("\n=== AVERAGE METRICS ===")
+    print(f"Average MSE: {avg_mse:.6f}")
+    print(f"Average R^2: {avg_r2:.4f}")
+    print(f"Average Directional Accuracy: {avg_diracc:.2%}")
