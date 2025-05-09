@@ -6,7 +6,7 @@ import numpy as np
 import pandas as pd
 
 from sklearn.feature_extraction.text import TfidfVectorizer
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error, r2_score
 from xgboost import XGBRegressor
 
 #########################################
@@ -192,8 +192,13 @@ def evaluate_per_ticker(model, X, y, metadata):
     for ticker in df["ticker"].unique():
         sub = df[df["ticker"] == ticker]
         mse = mean_squared_error(sub["y_true"], sub["y_pred"])
+        r2 = r2_score(sub["y_true"], sub["y_pred"])
         dir_acc = ((sub["y_true"] > 0) == (sub["y_pred"] > 0)).mean()
-        results[ticker] = {"MSE": mse, "Directional Accuracy": dir_acc}
+        results[ticker] = {
+            "MSE": mse,
+            "R²": r2,
+            "Directional Accuracy": dir_acc
+        }
 
     return results
 
@@ -217,7 +222,24 @@ if __name__ == "__main__":
     results = evaluate_per_ticker(xgb_model, X, y, metadata)
 
     print("\n=== XGBoost News-Based Stock Prediction Results ===")
+    r2_scores = []
+    mse_scores = []
+    acc_scores = []
+
     for ticker, stats in results.items():
         print(f"\n{ticker}:")
         print(f"  MSE: {stats['MSE']:.6f}")
+        print(f"  R²: {stats['R²']:.4f}")
         print(f"  Directional Accuracy: {stats['Directional Accuracy']:.2%}")
+        r2_scores.append(stats["R²"])
+        mse_scores.append(stats["MSE"])
+        acc_scores.append(stats["Directional Accuracy"])
+
+    if r2_scores:
+        avg_r2 = sum(r2_scores) / len(r2_scores)
+        avg_mse = sum(mse_scores) / len(mse_scores)
+        avg_acc = sum(acc_scores) / len(acc_scores)
+        print("\n=== Averages Across All Stocks ===")
+        print(f"  Average R²: {avg_r2:.4f}")
+        print(f"  Average MSE: {avg_mse:.6f}")
+        print(f"  Average Directional Accuracy: {avg_acc:.2%}")
