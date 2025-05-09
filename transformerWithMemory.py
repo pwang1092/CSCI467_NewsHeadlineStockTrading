@@ -1,4 +1,3 @@
-from baseline import getStockPriceChange, loadCompanyNews
 
 from sklearn.model_selection import train_test_split
 import datetime
@@ -90,46 +89,58 @@ def train_longformer_classifier():
     train_dataset = NewsClassificationDataset(X_train, y_train, tokenizer)
     test_dataset = NewsClassificationDataset(X_test, y_test, tokenizer)
 
-    model = LongformerForSequenceClassification.from_pretrained(
-        "allenai/longformer-base-4096",
-        num_labels=2
-    )
+    model_path = "longformer_model.pkl"
 
-    training_args = TrainingArguments(
-        output_dir="./longformer_cls_output",
-        per_device_train_batch_size=2,
-        per_device_eval_batch_size=2,
-        num_train_epochs=3,
-        eval_strategy="epoch",
-        save_strategy="epoch",
-        learning_rate=2e-5,
-        logging_dir="./logs",
-        logging_steps=20,
-        load_best_model_at_end=True,
-        metric_for_best_model="accuracy"
-    )
+    if os.path.exists(model_path):
+        print("Loading model from pickle...")
+        with open(model_path, "rb") as f:
+            model = pickle.load(f)
+    else:
+        print("Training new model...")
+        model = LongformerForSequenceClassification.from_pretrained(
+            "allenai/longformer-base-4096",
+            num_labels=2
+        )
 
-    def compute_metrics(pred):
-        from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
-        preds = np.argmax(pred.predictions, axis=1)
-        labels = pred.label_ids
-        return {
-            'accuracy': accuracy_score(labels, preds),
-            'precision': precision_score(labels, preds),
-            'recall': recall_score(labels, preds),
-            'f1': f1_score(labels, preds)
-        }
+        training_args = TrainingArguments(
+            output_dir="./longformer_cls_output",
+            per_device_train_batch_size=2,
+            per_device_eval_batch_size=2,
+            num_train_epochs=6,
+            eval_strategy="epoch",
+            save_strategy="epoch",
+            learning_rate=2e-5,
+            logging_dir="./logs",
+            logging_steps=20,
+            load_best_model_at_end=True,
+            metric_for_best_model="accuracy"
+        )
 
-    trainer = Trainer(
-        model=model,
-        args=training_args,
-        train_dataset=train_dataset,
-        eval_dataset=test_dataset,
-        compute_metrics=compute_metrics
-    )
+        def compute_metrics(pred):
+            from sklearn.metrics import accuracy_score, precision_score, recall_score, f1_score
+            preds = np.argmax(pred.predictions, axis=1)
+            labels = pred.label_ids
+            return {
+                'accuracy': accuracy_score(labels, preds),
+                'precision': precision_score(labels, preds),
+                'recall': recall_score(labels, preds),
+                'f1': f1_score(labels, preds)
+            }
 
-    trainer.train()
-    trainer.evaluate()
+        trainer = Trainer(
+            model=model,
+            args=training_args,
+            train_dataset=train_dataset,
+            eval_dataset=test_dataset,
+            compute_metrics=compute_metrics
+        )
+
+        trainer.train()
+        trainer.evaluate()
+
+        print("Saving model with pickle...")
+        with open(model_path, "wb") as f:
+            pickle.dump(model, f)
 
 if __name__ == "__main__":
     train_longformer_classifier()

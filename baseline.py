@@ -8,7 +8,7 @@ import yfinance as yf
 from vaderSentiment.vaderSentiment import SentimentIntensityAnalyzer
 
 from sklearn.linear_model import LinearRegression
-from sklearn.metrics import mean_squared_error
+from sklearn.metrics import mean_squared_error, r2_score
 from sklearn.model_selection import train_test_split
 
 from graphLinReg import plot_regression, plot_all_models, plot_articles_per_day_histogram
@@ -151,6 +151,30 @@ def calculate_mse(sentiment_scores, price_changes, models):
 
     return mse_scores
 
+def calculate_r2(sentiment_scores, price_changes, models):
+    r2_scores = {}
+    for ticker in models.keys():
+        if models[ticker] is None:
+            r2_scores[ticker] = None
+            continue
+        
+        sentiment_dict = sentiment_scores.get(ticker, {})
+        price_dict = price_changes.get(ticker, {})
+        
+        article_ids = set(sentiment_dict.keys()) & set(price_dict.keys())
+        X = [sentiment_dict[article_id] for article_id in article_ids if price_dict[article_id] is not None]
+        y_true = [price_dict[article_id] for article_id in article_ids if price_dict[article_id] is not None]
+        
+        if not X or not y_true:
+            r2_scores[ticker] = None
+            continue
+        
+        X = np.array(X).reshape(-1, 1)
+        y_pred = models[ticker].predict(X)
+        
+        r2_scores[ticker] = r2_score(y_true, y_pred)
+    
+    return r2_scores
 
 def calculate_directional_accuracy(sentiment_scores, price_changes):
     accuracy_scores = {}
@@ -233,9 +257,12 @@ if __name__ == "__main__":
     test_mse_scores = calculate_mse(test_sentiment_scores, test_price_changes, models)
     train_accuracy_scores = calculate_directional_accuracy(train_sentiment_scores, train_price_changes)
     test_accuracy_scores = calculate_directional_accuracy(test_sentiment_scores, test_price_changes)
+    train_r2_scores = calculate_r2(train_sentiment_scores, train_price_changes, models)
+    test_r2_scores = calculate_r2(test_sentiment_scores, test_price_changes, models)
 
     average_accuracy = 0
     average_RMSE = 0
+    average_R2 = 0
     # Print results
     for ticker in models.keys():
         if models[ticker] is not None:
@@ -247,8 +274,11 @@ if __name__ == "__main__":
             print(f"{ticker} Test RMSE: {test_mse:.6f}" if isinstance(test_mse, float) else f"{ticker} Test RMSE: {test_mse}")
             train_accuracy = train_accuracy_scores.get(ticker)
             test_accuracy = test_accuracy_scores.get(ticker)
+            test_r2 = test_r2_scores.get(ticker)
 
+            print(f"{ticker} Test R2: {test_r2:.6f}")
             average_RMSE += test_mse
+            average_R2 += test_r2
 
             if train_accuracy is not None:
                 print(f"{ticker} Train Directional Accuracy: {train_accuracy:.2%}")
@@ -264,7 +294,7 @@ if __name__ == "__main__":
         
     average_accuracy /= len(test_accuracy_scores)
     average_RMSE /= len(test_mse_scores)
-    print("\nAverage accuracy:", average_accuracy, ", Average RMSE:", average_RMSE)
+    print("\nAverage accuracy:", average_accuracy, ", Average RMSE:", average_RMSE, ", Average R2", average_R2)
 
     # Example output for UNH (assuming that's the ticker in your data)
     '''
